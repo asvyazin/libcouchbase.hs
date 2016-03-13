@@ -31,6 +31,16 @@ import Foreign.C.Types
 {# enum lcb_error_t as LcbError {underscoreToCase} deriving (Eq, Show) #}
 
 
+{# fun lcb_get_errtype as ^ {`LcbError'} -> `Int' #}
+
+
+{# fun lcb_strerror as ^ {`Lcb', `LcbError'} -> `String' #}
+
+
+-- lcb_errmap_default
+-- lcb_set_errmap_callback
+
+
 newLcb :: Ptr Lcb -> IO Lcb
 newLcb ptr =
   Lcb <$> newForeignPtr lcb_destroy ptr
@@ -47,7 +57,7 @@ peekLcb ptr =
 data ConnectionParams =
   ConnectionParams
   { connectionString :: String
-  , password :: String
+  , password :: Maybe String
   , lcbType :: LcbType
   } deriving (Show)
 
@@ -57,12 +67,16 @@ lcbCreate params = do
   allocaBytes {# sizeof lcb_create_st #} $ \st -> do
     fillBytes st 0 {# sizeof lcb_create_st #}
     {# set lcb_create_st.version #} st 3
+    {# set lcb_create_st.v.v3.type #} st $ fromIntegral $ fromEnum $ lcbType params
     withCString (connectionString params) $ \connstr -> do
       {# set lcb_create_st.v.v3.connstr #} st connstr
-      withCString (password params) $ \passwd -> do
-        {# set lcb_create_st.v.v3.passwd #} st passwd
-        {# set lcb_create_st.v.v3.type #} st $ fromIntegral $ fromEnum $ lcbType params
-        lcbCreateRaw st
+      case password params of
+        Just pwd ->
+          withCString pwd $ \passwd -> do
+            {# set lcb_create_st.v.v3.passwd #} st passwd
+            lcbCreateRaw st
+        Nothing ->
+          lcbCreateRaw st
 
 
 {# fun lcb_connect as ^ {`Lcb'} -> `LcbError' #}
