@@ -5,6 +5,7 @@
 module Couchbase.Raw where
 
 
+import qualified Data.ByteString as B
 import Foreign
 import Foreign.C.String
 import Foreign.C.Types
@@ -93,7 +94,59 @@ lcbCreate params = do
 -- lcb_strcbtype
 -- lcb_get3
 -- lcb_rget3
--- lcb_store3
+
+
+{# enum lcb_KVBUFTYPE as LcbKvBufType {underscoreToCase} deriving (Eq, Show) #}
+
+
+_lcbKreqSimple :: Ptr () -> B.ByteString -> IO ()
+_lcbKreqSimple p bs =
+  B.useAsCStringLen bs $ \(pv, len) -> do
+    {# set lcb_KEYBUF.type #} p $ fromIntegral $ fromEnum LcbKvCopy
+    {# set lcb_KEYBUF.contig.bytes #} p $ castPtr pv
+    {# set lcb_KEYBUF.contig.nbytes #} p $ fromIntegral len
+
+
+_lcbCmdStoreSetKey :: Ptr () -> B.ByteString -> IO ()
+_lcbCmdStoreSetKey p bs =
+  _lcbKreqSimple (plusPtr p {# offsetof lcb_CMDSTORE.key #}) bs
+
+
+_lcbCmdStoreSetValue :: Ptr () -> B.ByteString -> IO ()
+_lcbCmdStoreSetValue p bs =
+  B.useAsCStringLen bs $ \(pv, len) -> do
+    {# set lcb_CMDSTORE.value.vtype #} p $ fromIntegral $ fromEnum LcbKvCopy
+    {# set lcb_CMDSTORE.value.u_buf.contig.bytes #} p $ castPtr pv
+    {# set lcb_CMDSTORE.value.u_buf.contig.nbytes #} p $ fromIntegral len
+
+
+{# enum lcb_storage_t as LcbStorage {underscoreToCase} deriving (Eq, Show) #}
+
+
+data LcbCmdStore =
+  LcbCmdStore
+  { operation :: LcbStorage
+  , key :: B.ByteString
+  , value :: B.ByteString
+  } deriving (Show)
+
+
+{# fun lcb_store3 as lcbStore3Raw {`Lcb', `Ptr ()', `Ptr ()'} -> `LcbError' #}
+
+
+type LcbCookie = Ptr ()
+
+
+lcbStore3 :: Lcb -> LcbCookie -> LcbCmdStore -> IO LcbError
+lcbStore3 lcb cookie cmd =
+  allocaBytes {# sizeof lcb_CMDSTORE #} $ \st -> do
+    fillBytes st 0 {# sizeof lcb_CMDSTORE #}
+    {# set lcb_CMDSTORE.operation #} st $ fromIntegral $ fromEnum $ operation cmd
+    _lcbCmdStoreSetKey st $ key cmd
+    _lcbCmdStoreSetValue st $ value cmd
+    lcbStore3Raw lcb cookie st
+
+
 -- lcb_remove3
 -- lcb_endure3_ctxnew
 -- lcb_storedur3
