@@ -89,7 +89,32 @@ lcbCreate params = do
 {# fun lcb_get_bootstrap_status as ^ {`Lcb'} -> `LcbError' #}
 
 
--- lcb_install_callback3
+{# enum lcb_CALLBACKTYPE as LcbCallbackType {underscoreToCase} deriving (Eq, Show) #}
+
+
+type LcbCallbackRaw =
+  Ptr Lcb -> CInt -> Ptr () -> IO ()
+
+
+foreign import ccall "wrapper"
+  mkLcbCallbackFunPtr :: LcbCallbackRaw -> IO (FunPtr LcbCallbackRaw)
+
+
+type LcbCallback =
+  LcbCallbackType -> Ptr () -> IO ()
+
+
+withLcbCallback :: LcbCallback -> (FunPtr LcbCallbackRaw -> IO a) -> IO a
+withLcbCallback callback f =
+  mkLcbCallbackFunPtr (\ _ cb p -> callback (toEnum (fromIntegral cb)) p) >>= f
+
+
+type OldCallbackPtr = FunPtr LcbCallbackRaw
+
+
+{# fun lcb_install_callback3 as ^ {`Lcb', `LcbCallbackType', withLcbCallback* `LcbCallback'} -> `OldCallbackPtr' id #}
+
+
 -- lcb_get_callback3
 -- lcb_strcbtype
 -- lcb_get3
@@ -145,6 +170,60 @@ lcbStore3 lcb cookie cmd =
     _lcbCmdStoreSetKey st $ key cmd
     _lcbCmdStoreSetValue st $ value cmd
     lcbStore3Raw lcb cookie st
+
+
+{# pointer *lcb_RESPSTORE as LcbRespStorePtr #}
+
+
+lcbRespStoreGetOp :: LcbRespStorePtr -> IO LcbStorage
+lcbRespStoreGetOp p = (toEnum . fromIntegral) <$> {# get lcb_RESPSTORE.op #} p
+
+
+_lcbRespBaseGetCookie :: Ptr () -> IO LcbCookie
+_lcbRespBaseGetCookie p = {# get lcb_RESPBASE.cookie #} p
+
+
+lcbRespStoreGetCookie :: LcbRespStorePtr -> IO LcbCookie
+lcbRespStoreGetCookie = _lcbRespBaseGetCookie . castPtr
+
+
+_lcbRespBaseGetKey :: Ptr () -> IO B.ByteString
+_lcbRespBaseGetKey p = do
+  pv <- {# get lcb_RESPBASE.key #} p
+  len <- {# get lcb_RESPBASE.nkey #} p
+  B.packCStringLen (castPtr pv, fromIntegral len)
+
+
+lcbRespStoreGetKey :: LcbRespStorePtr -> IO B.ByteString
+lcbRespStoreGetKey = _lcbRespBaseGetKey . castPtr
+
+
+_lcbRespBaseGetStatus :: Ptr () -> IO LcbError
+_lcbRespBaseGetStatus p = (toEnum . fromIntegral) <$> {# get lcb_RESPBASE.rc #} p
+
+
+lcbRespStoreGetStatus :: LcbRespStorePtr -> IO LcbError
+lcbRespStoreGetStatus = _lcbRespBaseGetStatus . castPtr
+
+
+type LcbCas = {# type lcb_CAS #}
+
+
+_lcbRespBaseGetCas :: Ptr () -> IO LcbCas
+_lcbRespBaseGetCas p = {# get lcb_RESPBASE.cas #} p
+
+
+lcbRespStoreGetCas :: LcbRespStorePtr -> IO LcbCas
+lcbRespStoreGetCas = _lcbRespBaseGetCas . castPtr
+
+
+type LcbRespStoreCallback =
+  LcbRespStorePtr -> IO ()
+
+
+lcbInstallRespStoreCallback :: Lcb -> LcbRespStoreCallback -> IO OldCallbackPtr
+lcbInstallRespStoreCallback lcb callback =
+  lcbInstallCallback3 lcb LcbCallbackStore $ \ _ p -> callback (castPtr p)
 
 
 -- lcb_remove3
