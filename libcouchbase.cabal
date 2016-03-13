@@ -27,3 +27,4 @@ library
   CC-options:          -Wall -pedantic
   Include-Dirs:        include
   GHC-options:         -Wall
+  extra-libraries:     libcouchbase

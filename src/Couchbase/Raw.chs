@@ -16,7 +16,7 @@ import Foreign.C.Types
 #include <libcouchbase/couchbase.h>
 
 
-{# context lib="couchbase" #}
+{# context lib="libcouchbase" #}
 
 
 {# enum lcb_type_t as LcbType {underscoreToCase} deriving (Eq, Show) #}
@@ -53,8 +53,9 @@ data ConnectionParams =
 
 
 lcbCreate :: ConnectionParams -> IO (LcbError, Lcb)
-lcbCreate params =
+lcbCreate params = do
   allocaBytes {# sizeof lcb_create_st #} $ \st -> do
+    fillBytes st 0 {# sizeof lcb_create_st #}
     {# set lcb_create_st.version #} st 3
     withCString (connectionString params) $ \connstr -> do
       {# set lcb_create_st.v.v3.connstr #} st connstr
