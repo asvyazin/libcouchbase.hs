@@ -200,63 +200,63 @@ main = hspec $ do
         lcbGet3 lcb nullPtr "key" `shouldReturn` LcbSuccess
         lcbWait lcb `shouldReturn` LcbSuccess
 
-    it "increments CAS with LcbReplace" $ do
+    it "changes CAS with LcbReplace" $ do
       setValue "key" "value1"
       withConnection $ \lcb -> do
         lcbInstallGetCallback lcb $ \respGet -> do
           oldCas <- lcbRespGetGetCas respGet
           lcbInstallStoreCallback lcb $ \resp -> do
-            cas <- lcbRespStoreGetCas resp
-            cas `shouldSatisfy` (> oldCas)
-          let cmd = LcbCmdStore LcbReplace "key" "value2" Nothing
+            lcbRespStoreGetStatus resp `shouldReturn` LcbSuccess
+            lcbRespStoreGetCas resp `shouldNotReturn` oldCas
+          let cmd = LcbCmdStore LcbReplace "key" "value2" (Just oldCas)
           lcbStore3 lcb nullPtr cmd `shouldReturn` LcbSuccess
           lcbWait lcb `shouldReturn` LcbSuccess
         lcbGet3 lcb nullPtr "key" `shouldReturn` LcbSuccess
         lcbWait lcb `shouldReturn` LcbSuccess
 
-    it "increments CAS with LcbSet" $ do
+    it "changes CAS with LcbSet" $ do
       setValue "key" "value1"
       withConnection $ \lcb -> do
         lcbInstallGetCallback lcb $ \respGet -> do
           oldCas <- lcbRespGetGetCas respGet
           lcbInstallStoreCallback lcb $ \resp -> do
-            cas <- lcbRespStoreGetCas resp
-            cas `shouldSatisfy` (> oldCas)
-          let cmd = LcbCmdStore LcbSet "key" "value2" Nothing
+            lcbRespStoreGetStatus resp `shouldReturn` LcbSuccess
+            lcbRespStoreGetCas resp `shouldNotReturn` oldCas
+          let cmd = LcbCmdStore LcbSet "key" "value2" (Just oldCas)
           lcbStore3 lcb nullPtr cmd `shouldReturn` LcbSuccess
           lcbWait lcb `shouldReturn` LcbSuccess
         lcbGet3 lcb nullPtr "key" `shouldReturn` LcbSuccess
         lcbWait lcb `shouldReturn` LcbSuccess
 
-    it "increments CAS with LcbAppend" $ do
+    it "changes CAS with LcbAppend" $ do
       setValue "key" "value1"
       withConnection $ \lcb -> do
         lcbInstallGetCallback lcb $ \respGet -> do
           oldCas <- lcbRespGetGetCas respGet
           lcbInstallStoreCallback lcb $ \resp -> do
-            cas <- lcbRespStoreGetCas resp
-            cas `shouldSatisfy` (> oldCas)
-          let cmd = LcbCmdStore LcbAppend "key" "value2" Nothing
+            lcbRespStoreGetStatus resp `shouldReturn` LcbSuccess
+            lcbRespStoreGetCas resp `shouldNotReturn` oldCas
+          let cmd = LcbCmdStore LcbAppend "key" "value2" (Just oldCas)
           lcbStore3 lcb nullPtr cmd `shouldReturn` LcbSuccess
           lcbWait lcb `shouldReturn` LcbSuccess
         lcbGet3 lcb nullPtr "key" `shouldReturn` LcbSuccess
         lcbWait lcb `shouldReturn` LcbSuccess
 
-    it "increments CAS with LcbPrepend" $ do
+    it "changes CAS with LcbPrepend" $ do
       setValue "key" "value1"
       withConnection $ \lcb -> do
         lcbInstallGetCallback lcb $ \respGet -> do
           oldCas <- lcbRespGetGetCas respGet
           lcbInstallStoreCallback lcb $ \resp -> do
-            cas <- lcbRespStoreGetCas resp
-            cas `shouldSatisfy` (> oldCas)
-          let cmd = LcbCmdStore LcbPrepend "key" "value2" Nothing
+            lcbRespStoreGetStatus resp `shouldReturn` LcbSuccess
+            lcbRespStoreGetCas resp `shouldNotReturn` oldCas
+          let cmd = LcbCmdStore LcbPrepend "key" "value2" (Just oldCas)
           lcbStore3 lcb nullPtr cmd `shouldReturn` LcbSuccess
           lcbWait lcb `shouldReturn` LcbSuccess
         lcbGet3 lcb nullPtr "key" `shouldReturn` LcbSuccess
         lcbWait lcb `shouldReturn` LcbSuccess
 
-    it "returns error in callback when you try LcbReplace with wrong CAS" $ do
+    it "returns error in callback when you try LcbReplace with CAS - 1" $ do
       setValue "key" "value1"
       withConnection $ \lcb -> do
         lcbInstallGetCallback lcb $ \respGet -> do
@@ -269,7 +269,7 @@ main = hspec $ do
         lcbGet3 lcb nullPtr "key" `shouldReturn` LcbSuccess
         lcbWait lcb `shouldReturn` LcbSuccess
 
-    it "returns error in callback when you try LcbSet with wrong CAS" $ do
+    it "returns error in callback when you try LcbSet with CAS - 1" $ do
       setValue "key" "value1"
       withConnection $ \lcb -> do
         lcbInstallGetCallback lcb $ \respGet -> do
@@ -282,7 +282,7 @@ main = hspec $ do
         lcbGet3 lcb nullPtr "key" `shouldReturn` LcbSuccess
         lcbWait lcb `shouldReturn` LcbSuccess
 
-    it "returns error in callback when you try LcbAppend with wrong CAS" $ do
+    it "returns error in callback when you try LcbAppend with CAS - 1" $ do
       setValue "key" "value1"
       withConnection $ \lcb -> do
         lcbInstallGetCallback lcb $ \respGet -> do
@@ -295,7 +295,7 @@ main = hspec $ do
         lcbGet3 lcb nullPtr "key" `shouldReturn` LcbSuccess
         lcbWait lcb `shouldReturn` LcbSuccess
 
-    it "returns error in callback when you try LcbPrepend with wrong CAS" $ do
+    it "returns error in callback when you try LcbPrepend with CAS - 1" $ do
       setValue "key" "value1"
       withConnection $ \lcb -> do
         lcbInstallGetCallback lcb $ \respGet -> do
@@ -308,53 +308,53 @@ main = hspec $ do
         lcbGet3 lcb nullPtr "key" `shouldReturn` LcbSuccess
         lcbWait lcb `shouldReturn` LcbSuccess
 
-    it "succeeds with LcbReplace and good CAS" $ do
+    it "returns error in callback when you try LcbReplace with CAS + 1" $ do
       setValue "key" "value1"
       withConnection $ \lcb -> do
         lcbInstallGetCallback lcb $ \respGet -> do
           oldCas <- lcbRespGetGetCas respGet
           lcbInstallStoreCallback lcb $ \resp ->
-            lcbRespStoreGetStatus resp `shouldReturn` LcbSuccess
-          let cmd = LcbCmdStore LcbReplace "key" "value2" (Just oldCas)
+            lcbRespStoreGetStatus resp `shouldReturn` LcbKeyEexists
+          let cmd = LcbCmdStore LcbReplace "key" "value2" (Just (oldCas + 1))
           lcbStore3 lcb nullPtr cmd `shouldReturn` LcbSuccess
           lcbWait lcb `shouldReturn` LcbSuccess
         lcbGet3 lcb nullPtr "key" `shouldReturn` LcbSuccess
         lcbWait lcb `shouldReturn` LcbSuccess
 
-    it "succeeds with LcbSet and good CAS" $ do
+    it "returns error in callback when you try LcbSet with CAS + 1" $ do
       setValue "key" "value1"
       withConnection $ \lcb -> do
         lcbInstallGetCallback lcb $ \respGet -> do
           oldCas <- lcbRespGetGetCas respGet
           lcbInstallStoreCallback lcb $ \resp ->
-            lcbRespStoreGetStatus resp `shouldReturn` LcbSuccess
-          let cmd = LcbCmdStore LcbSet "key" "value2" (Just oldCas)
+            lcbRespStoreGetStatus resp `shouldReturn` LcbKeyEexists
+          let cmd = LcbCmdStore LcbSet "key" "value2" (Just (oldCas + 1))
           lcbStore3 lcb nullPtr cmd `shouldReturn` LcbSuccess
           lcbWait lcb `shouldReturn` LcbSuccess
         lcbGet3 lcb nullPtr "key" `shouldReturn` LcbSuccess
         lcbWait lcb `shouldReturn` LcbSuccess
 
-    it "succeeds with LcbAppend and good CAS" $ do
+    it "returns error in callback when you try LcbAppend with CAS + 1" $ do
       setValue "key" "value1"
       withConnection $ \lcb -> do
         lcbInstallGetCallback lcb $ \respGet -> do
           oldCas <- lcbRespGetGetCas respGet
           lcbInstallStoreCallback lcb $ \resp ->
-            lcbRespStoreGetStatus resp `shouldReturn` LcbSuccess
-          let cmd = LcbCmdStore LcbAppend "key" "value2" (Just oldCas)
+            lcbRespStoreGetStatus resp `shouldReturn` LcbKeyEexists
+          let cmd = LcbCmdStore LcbAppend "key" "value2" (Just (oldCas + 1))
           lcbStore3 lcb nullPtr cmd `shouldReturn` LcbSuccess
           lcbWait lcb `shouldReturn` LcbSuccess
         lcbGet3 lcb nullPtr "key" `shouldReturn` LcbSuccess
         lcbWait lcb `shouldReturn` LcbSuccess
 
-    it "succeeds with LcbPrepend and good CAS" $ do
+    it "returns error in callback when you try LcbPrepend with CAS + 1" $ do
       setValue "key" "value1"
       withConnection $ \lcb -> do
         lcbInstallGetCallback lcb $ \respGet -> do
           oldCas <- lcbRespGetGetCas respGet
           lcbInstallStoreCallback lcb $ \resp ->
-            lcbRespStoreGetStatus resp `shouldReturn` LcbSuccess
-          let cmd = LcbCmdStore LcbPrepend "key" "value2" (Just oldCas)
+            lcbRespStoreGetStatus resp `shouldReturn` LcbKeyEexists
+          let cmd = LcbCmdStore LcbPrepend "key" "value2" (Just (oldCas + 1))
           lcbStore3 lcb nullPtr cmd `shouldReturn` LcbSuccess
           lcbWait lcb `shouldReturn` LcbSuccess
         lcbGet3 lcb nullPtr "key" `shouldReturn` LcbSuccess
