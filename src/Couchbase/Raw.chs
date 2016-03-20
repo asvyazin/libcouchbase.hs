@@ -117,32 +117,77 @@ type OldCallbackPtr = FunPtr LcbCallbackRaw
 
 -- lcb_get_callback3
 -- lcb_strcbtype
--- lcb_get3
+
+
+{# pointer *lcb_RESPGET as LcbRespGetPtr #}
+
+
+lcbRespGetGetValue :: LcbRespGetPtr -> IO B.ByteString
+lcbRespGetGetValue pv = do
+  bytes <- {# get lcb_RESPGET.value #} pv
+  nbytes <- {# get lcb_RESPGET.nvalue #} pv
+  B.packCStringLen (castPtr bytes, fromIntegral nbytes)
+
+
+lcbRespGetGetStatus :: LcbRespGetPtr -> IO LcbError
+lcbRespGetGetStatus = _lcbRespBaseGetStatus
+
+
+type LcbGetCallback =
+  LcbRespGetPtr -> IO ()
+
+
+lcbInstallGetCallback :: Lcb -> LcbGetCallback -> IO OldCallbackPtr
+lcbInstallGetCallback lcb callback =
+  lcbInstallCallback3 lcb LcbCallbackGet $ \ _ ptr -> callback ptr
+
+
+_lcbCmdGetSetKey :: Ptr () -> B.ByteString -> IO a -> IO a
+_lcbCmdGetSetKey p bs callback =
+  _lcbKreqSimple (plusPtr p {# offsetof lcb_CMDGET.key #}) bs callback
+
+
+{# fun lcb_get3 as lcbGet3Raw {`Lcb', `Ptr ()', `Ptr ()'} -> `LcbError' #}
+
+
+type LcbCookie = Ptr ()
+
+
+lcbGet3 :: Lcb -> LcbCookie -> B.ByteString -> IO LcbError
+lcbGet3 lcb cookie key = do
+  allocaBytes {# sizeof lcb_CMDGET #} $ \st -> do
+    fillBytes st 0 {# sizeof lcb_CMDGET #}
+    _lcbCmdGetSetKey st key $
+      lcbGet3Raw lcb cookie st
+
+
 -- lcb_rget3
 
 
 {# enum lcb_KVBUFTYPE as LcbKvBufType {underscoreToCase} deriving (Eq, Show) #}
 
 
-_lcbKreqSimple :: Ptr () -> B.ByteString -> IO ()
-_lcbKreqSimple p bs =
+_lcbKreqSimple :: Ptr () -> B.ByteString -> IO a -> IO a
+_lcbKreqSimple p bs callback =
   B.useAsCStringLen bs $ \(pv, len) -> do
     {# set lcb_KEYBUF.type #} p $ fromIntegral $ fromEnum LcbKvCopy
     {# set lcb_KEYBUF.contig.bytes #} p $ castPtr pv
     {# set lcb_KEYBUF.contig.nbytes #} p $ fromIntegral len
+    callback
 
 
-_lcbCmdStoreSetKey :: Ptr () -> B.ByteString -> IO ()
-_lcbCmdStoreSetKey p bs =
-  _lcbKreqSimple (plusPtr p {# offsetof lcb_CMDSTORE.key #}) bs
+_lcbCmdStoreSetKey :: Ptr () -> B.ByteString -> IO a -> IO a
+_lcbCmdStoreSetKey p bs callback =
+  _lcbKreqSimple (plusPtr p {# offsetof lcb_CMDSTORE.key #}) bs callback
 
 
-_lcbCmdStoreSetValue :: Ptr () -> B.ByteString -> IO ()
-_lcbCmdStoreSetValue p bs =
+_lcbCmdStoreSetValue :: Ptr () -> B.ByteString -> IO a -> IO a
+_lcbCmdStoreSetValue p bs callback =
   B.useAsCStringLen bs $ \(pv, len) -> do
     {# set lcb_CMDSTORE.value.vtype #} p $ fromIntegral $ fromEnum LcbKvCopy
     {# set lcb_CMDSTORE.value.u_buf.contig.bytes #} p $ castPtr pv
     {# set lcb_CMDSTORE.value.u_buf.contig.nbytes #} p $ fromIntegral len
+    callback
 
 
 {# enum lcb_storage_t as LcbStorage {underscoreToCase} deriving (Eq, Show) #}
@@ -150,26 +195,23 @@ _lcbCmdStoreSetValue p bs =
 
 data LcbCmdStore =
   LcbCmdStore
-  { operation :: LcbStorage
-  , key :: B.ByteString
-  , value :: B.ByteString
+  { lcs_operation :: LcbStorage
+  , lcs_key :: B.ByteString
+  , lcs_value :: B.ByteString
   } deriving (Show)
 
 
 {# fun lcb_store3 as lcbStore3Raw {`Lcb', `Ptr ()', `Ptr ()'} -> `LcbError' #}
 
 
-type LcbCookie = Ptr ()
-
-
 lcbStore3 :: Lcb -> LcbCookie -> LcbCmdStore -> IO LcbError
 lcbStore3 lcb cookie cmd =
   allocaBytes {# sizeof lcb_CMDSTORE #} $ \st -> do
     fillBytes st 0 {# sizeof lcb_CMDSTORE #}
-    {# set lcb_CMDSTORE.operation #} st $ fromIntegral $ fromEnum $ operation cmd
-    _lcbCmdStoreSetKey st $ key cmd
-    _lcbCmdStoreSetValue st $ value cmd
-    lcbStore3Raw lcb cookie st
+    {# set lcb_CMDSTORE.operation #} st $ fromIntegral $ fromEnum $ lcs_operation cmd
+    _lcbCmdStoreSetKey st (lcs_key cmd) $
+      _lcbCmdStoreSetValue st (lcs_value cmd) $
+        lcbStore3Raw lcb cookie st
 
 
 {# pointer *lcb_RESPSTORE as LcbRespStorePtr #}
@@ -195,7 +237,7 @@ _lcbRespBaseGetKey p = do
 
 
 lcbRespStoreGetKey :: LcbRespStorePtr -> IO B.ByteString
-lcbRespStoreGetKey = _lcbRespBaseGetKey . castPtr
+lcbRespStoreGetKey = _lcbRespBaseGetKey
 
 
 _lcbRespBaseGetStatus :: Ptr () -> IO LcbError
@@ -203,7 +245,7 @@ _lcbRespBaseGetStatus p = (toEnum . fromIntegral) <$> {# get lcb_RESPBASE.rc #} 
 
 
 lcbRespStoreGetStatus :: LcbRespStorePtr -> IO LcbError
-lcbRespStoreGetStatus = _lcbRespBaseGetStatus . castPtr
+lcbRespStoreGetStatus = _lcbRespBaseGetStatus
 
 
 type LcbCas = {# type lcb_CAS #}
@@ -214,19 +256,50 @@ _lcbRespBaseGetCas p = {# get lcb_RESPBASE.cas #} p
 
 
 lcbRespStoreGetCas :: LcbRespStorePtr -> IO LcbCas
-lcbRespStoreGetCas = _lcbRespBaseGetCas . castPtr
+lcbRespStoreGetCas = _lcbRespBaseGetCas
 
 
-type LcbRespStoreCallback =
+type LcbStoreCallback =
   LcbRespStorePtr -> IO ()
 
 
-lcbInstallRespStoreCallback :: Lcb -> LcbRespStoreCallback -> IO OldCallbackPtr
-lcbInstallRespStoreCallback lcb callback =
-  lcbInstallCallback3 lcb LcbCallbackStore $ \ _ p -> callback (castPtr p)
+lcbInstallStoreCallback :: Lcb -> LcbStoreCallback -> IO OldCallbackPtr
+lcbInstallStoreCallback lcb callback =
+  lcbInstallCallback3 lcb LcbCallbackStore $ \ _ p -> callback p
 
 
--- lcb_remove3
+_lcbCmdRemoveSetKey :: Ptr () -> B.ByteString -> IO a -> IO a
+_lcbCmdRemoveSetKey p bs callback =
+  _lcbKreqSimple (plusPtr p {# offsetof lcb_CMDREMOVE.key #}) bs callback
+
+
+{# pointer *lcb_RESPREMOVE as LcbRespRemovePtr #}
+
+
+lcbRespRemoveGetStatus :: LcbRespRemovePtr -> IO LcbError
+lcbRespRemoveGetStatus = _lcbRespBaseGetStatus
+
+
+type LcbRemoveCallback =
+  LcbRespRemovePtr -> IO ()
+
+
+lcbInstallRemoveCallback :: Lcb -> LcbRemoveCallback -> IO OldCallbackPtr
+lcbInstallRemoveCallback lcb callback =
+  lcbInstallCallback3 lcb LcbCallbackRemove $ \ _ p -> callback p
+
+
+{# fun lcb_remove3 as lcbRemove3Raw {`Lcb', `Ptr ()', `Ptr ()'} -> `LcbError' #}
+
+
+lcbRemove3 :: Lcb -> LcbCookie -> B.ByteString -> IO LcbError
+lcbRemove3 lcb cookie key = do
+  allocaBytes {# sizeof lcb_CMDREMOVE #} $ \st -> do
+    fillBytes st 0 {# sizeof lcb_CMDREMOVE #}
+    _lcbCmdRemoveSetKey st key $
+      lcbRemove3Raw lcb cookie st
+
+
 -- lcb_endure3_ctxnew
 -- lcb_storedur3
 -- lcb_durability_validate
