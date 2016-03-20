@@ -133,6 +133,10 @@ lcbRespGetGetStatus :: LcbRespGetPtr -> IO LcbError
 lcbRespGetGetStatus = _lcbRespBaseGetStatus
 
 
+lcbRespGetGetCas :: LcbRespGetPtr -> IO LcbCas
+lcbRespGetGetCas = _lcbRespBaseGetCas
+
+
 type LcbGetCallback =
   LcbRespGetPtr -> IO ()
 
@@ -198,6 +202,7 @@ data LcbCmdStore =
   { lcs_operation :: LcbStorage
   , lcs_key :: B.ByteString
   , lcs_value :: B.ByteString
+  , lcs_cas :: Maybe LcbCas
   } deriving (Show)
 
 
@@ -209,6 +214,11 @@ lcbStore3 lcb cookie cmd =
   allocaBytes {# sizeof lcb_CMDSTORE #} $ \st -> do
     fillBytes st 0 {# sizeof lcb_CMDSTORE #}
     {# set lcb_CMDSTORE.operation #} st $ fromIntegral $ fromEnum $ lcs_operation cmd
+    case lcs_cas cmd of
+      Just cas ->
+        {# set lcb_CMDSTORE.cas #} st cas
+      Nothing ->
+        return ()
     _lcbCmdStoreSetKey st (lcs_key cmd) $
       _lcbCmdStoreSetValue st (lcs_value cmd) $
         lcbStore3Raw lcb cookie st
